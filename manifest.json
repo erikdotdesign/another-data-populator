@@ -1,0 +1,20 @@
+{
+  "name": "another-data-populator",
+  "id": "1507375345145522305",
+  "api": "1.0.0",
+  "main": "code.js",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": [
+    "figma",
+    "figjam",
+    "slides"
+  ],
+  "ui": "ui.html",
+  "networkAccess": {
+    "allowedDomains": [
+      "https://dummyjson.com"
+    ]
+  }
+}

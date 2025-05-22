@@ -1,0 +1,18 @@
+<html>
+  <body>
+    <style>
+      body { font-family: sans-serif; padding: 16px; }
+      textarea { width: 100%; height: 120px; margin-bottom: 8px; }
+      button { padding: 8px 16px; }
+    </style>
+    <h2>Paste JSON Data</h2>
+    <textarea id="json-input" placeholder='[{ "firstName": "Jane", "lastName": "Doe" }]'>https://dummyjson.com/users</textarea>
+    <button id="populate">Populate</button>
+    <script>
+      document.getElementById('populate').onclick = () => {
+        const raw = document.getElementById('json-input').value;
+        parent.postMessage({ pluginMessage: { type: 'populate', raw } }, '*');
+      }
+    </script>
+  </body>
+</html>
