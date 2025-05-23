@@ -1,6 +1,6 @@
 figma.showUI(__html__, { width: 360, height: 420 });
 
-const IMAGEKIT_BASE = "https://ik.imagekit.io/erikdotdesign/figma-data-populator/tr:f-png/";
+const IMAGEKIT_BASE = "https://ik.imagekit.io/erikdotdesign/another-data-populator/tr:f-png/";
 
 const getConvertedImageUrl = (webpUrl) => {
   return IMAGEKIT_BASE + encodeURIComponent(webpUrl);
