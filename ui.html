@@ -3,16 +3,37 @@
     <style>
       body { font-family: sans-serif; padding: 16px; }
       textarea { width: 100%; height: 120px; margin-bottom: 8px; }
-      button { padding: 8px 16px; }
+      button { padding: 8px 16px; margin-right: 8px; }
+      select { width: 100%; margin-bottom: 8px; }
     </style>
-    <h2>Paste JSON Data</h2>
-    <textarea id="json-input" placeholder='[{ "firstName": "Jane", "lastName": "Doe" }]'>https://dummyjson.com/users</textarea>
+    <h2>Paste JSON Data or Choose Preset</h2>
+    <select id="preset">
+      <option value="">-- Select DummyJSON Preset --</option>
+      <option value="https://dummyjson.com/products">Products</option>
+      <option value="https://dummyjson.com/carts">Carts</option>
+      <option value="https://dummyjson.com/recipes">Recipes</option>
+      <option value="https://dummyjson.com/users">Users</option>
+      <option value="https://dummyjson.com/posts">Posts</option>
+      <option value="https://dummyjson.com/comments">Comments</option>
+      <option value="https://dummyjson.com/todos">Todos</option>
+      <option value="https://dummyjson.com/quotes">Quotes</option>
+    </select>
+    <textarea id="json-input" placeholder='{"users": [{ "name": { "first": "Jane" }, "avatar": "https://example.com/image.jpg" }]}'></textarea>
     <button id="populate">Populate</button>
     <script>
+      const presetSelect = document.getElementById('preset');
+      presetSelect.addEventListener('change', async () => {
+        const url = presetSelect.value;
+        if (url) {
+          const res = await fetch(url);
+          const data = await res.json();
+          document.getElementById('json-input').value = JSON.stringify(data, null, 2);
+        }
+      });
       document.getElementById('populate').onclick = () => {
         const raw = document.getElementById('json-input').value;
         parent.postMessage({ pluginMessage: { type: 'populate', raw } }, '*');
-      }
+      };
     </script>
   </body>
 </html>

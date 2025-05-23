@@ -1,136 +1,125 @@
-figma.showUI(__html__, { width: 360, height: 300 });
+figma.showUI(__html__, { width: 360, height: 420 });
 
-const validURL = (str) => {
-  const pattern = new RegExp('^(https?:\\/\\/)?'+ // protocol
-    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // domain name
-    '((\\d{1,3}\\.){3}\\d{1,3}))'+ // OR ip (v4) address
-    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // port and path
-    '(\\?[;&a-z\\d%_.~+=-]*)?'+ // query string
-    '(\\#[-a-z\\d_]*)?$','i'); // fragment locator
-  return !!pattern.test(str);
-}
+const IMAGEKIT_BASE = "https://ik.imagekit.io/erikdotdesign/figma-data-populator/tr:f-png/";
 
-const getLeafNodes = (node) => {
-  const leafNodes: SceneNode[] = [];
+const getConvertedImageUrl = (webpUrl) => {
+  return IMAGEKIT_BASE + encodeURIComponent(webpUrl);
+};
 
-  const cannotHaveChildren = [
-    "RECTANGLE",
-    "ELLIPSE",
-    "POLYGON",
-    "STAR",
-    "VECTOR",
-    "TEXT",
-    "LINE",
-    "BOOLEAN_OPERATION",
-    "SHAPE_WITH_TEXT",
-    "STAMP",
-    "PLACEHOLDER"
-  ];
+const getValueByPath = (obj, path) => {
+  try {
+    return path.replace(/\[(\w+)\]/g, '.$1').split('.').reduce((o, p) => o?.[p], obj);
+  } catch {
+    return undefined;
+  }
+};
 
-  const collectLeafNodes = (node: SceneNode) => {
-    if (cannotHaveChildren.includes(node.type)) {
-      leafNodes.push(node);
-    } else if ("children" in node && node.type !== "INSTANCE") {
-      for (const child of node.children) {
-        collectLeafNodes(child);
-      }
-    }
-  };
-
-  collectLeafNodes(node);
-
-  return leafNodes;
-}
-
-const handleTextNode = async (node, entry) => {
+const populateTextNode = async (node, entry) => {
   await figma.loadFontAsync(node.fontName);
   const placeholders = node.characters.match(/\{\{(.*?)\}\}/g);
   if (placeholders) {
     let newText = node.characters;
-    // for (const tag of placeholders) {
-    //   const key = tag.replace(/\{|\}/g, '').trim();
-    //   if (entry[key]) {
-    //     newText = newText.replace(tag, entry[key]);
-    //   }
-    // }
     for (const tag of placeholders) {
-      const key = tag.replace(/\{|\}/g, '').trim().split('.');
-      let value = entry;
-      for (const step of key) {
-        if (value[step]) {
-          value = value[step];
-        }
-      }
-      if (value) {
+      const key = tag.replace(/\{|\}/g, '').trim();
+      const value = typeof entry === 'string' ? entry : getValueByPath(entry, key);
+      if (value !== undefined) {
         newText = newText.replace(tag, value);
       }
     }
     node.characters = newText;
   }
-}
+};
 
-const handleImageNode = async (node, entry) => {
+const populateImageNode = async (node, entry) => {
   const imageMatch = node.name.match(/^\{\{(.*?)\}\}$/);
-  if (imageMatch) {
-    const key = imageMatch[1].trim();
-    const url = entry[key];
-    if (url) {
-      try {
-        const response = await fetch(url);
-        const arrayBuffer = await response.arrayBuffer();
-        const image = figma.createImage(new Uint8Array(arrayBuffer));
-        const fills = [
-          {
-            type: 'IMAGE',
-            scaleMode: 'FILL',
-            imageHash: image.hash
-          }
-        ];
-        node.fills = fills;
-      } catch (e) {
-        figma.notify(`Failed to load image from ${url}`);
+  if (!imageMatch) return;
+
+  const key = imageMatch[1].trim();
+  const url = typeof entry === 'string' ? entry : getValueByPath(entry, key);
+  let imageData = null;
+
+  let finalUrl = url;
+
+  if (url?.endsWith(".webp")) {
+    finalUrl = getConvertedImageUrl(url);
+  }
+
+  try {
+    const response = await fetch(finalUrl);
+    const buffer = await response.arrayBuffer();
+    imageData = new Uint8Array(buffer);
+  } catch (err) {
+    const w = Math.round(node.width);
+    const h = Math.round(node.height);
+    const fallback = `https://dummyjson.com/image/${w}x${h}?type=png&fontFamily=ubuntu`;
+    const response = await fetch(fallback);
+    const buffer = await response.arrayBuffer();
+    imageData = new Uint8Array(buffer);
+  }
+
+  if (imageData) {
+    const image = figma.createImage(imageData);
+    node.fills = [{ type: 'IMAGE', scaleMode: 'FILL', imageHash: image.hash }];
+  }
+};
+
+const populateTemplateGroup = async (group, entries) => {
+  const match = group.name.match(/^\{\{(.*?)\s*\|\s*(\d+)\}\}$/);
+  if (!match || !Array.isArray(entries)) return;
+
+  const [, key, countStr] = match;
+  const count = parseInt(countStr);
+  let list = getValueByPath(entries[0], key);
+
+  if (!Array.isArray(list)) return;
+
+  const template = group.findChild(n => n.name === "{{template}}");
+  if (!template || !("clone" in template)) return;
+
+  const clones = [];
+  for (let i = 0; i < count && i < list.length; i++) {
+    const clone = template.clone();
+    clone.name = template.name;
+    clone.relativeTransform = template.relativeTransform;
+    group.appendChild(clone);
+    await recursivelyPopulate(clone, [list[i]]);
+    clones.push(clone);
+  }
+
+  template.remove();
+};
+
+const recursivelyPopulate = async (node, data) => {
+  if (node.type === 'TEXT') {
+    await populateTextNode(node, data[0]);
+  } else if ("fills" in node && Array.isArray(node.fills)) {
+    await populateImageNode(node, data[0]);
+  } else if ("children" in node) {
+    const templateGroupMatch = node.name.match(/^\{\{(.*?)\s*\|\s*(\d+)\}\}$/);
+    if (templateGroupMatch) {
+      await populateTemplateGroup(node, data);
+    } else {
+      for (const child of node.children) {
+        await recursivelyPopulate(child, data);
       }
     }
   }
-}
-
-async function populateNodesWithData(nodes, data) {
-  // let entry = data;
-  // if (Array.isArray(data)) {
-  //   entry = data[Math.floor(Math.random() * data.length)];
-  // }
-  let entry = data;
-
-  for (const node of nodes) {
-    const leafNodes = getLeafNodes(node);
-    for (const leafNode of leafNodes) {
-      if (leafNode.type === "TEXT" && leafNode.characters.includes("{{")) {
-        await handleTextNode(leafNode, entry);
-      } else if ("fills" in leafNode && Array.isArray(leafNode.fills)) {
-        await handleImageNode(leafNode, entry);
-      }
-    }
-  }
-}
+};
 
 figma.ui.onmessage = async msg => {
   if (msg.type === 'populate') {
     try {
-      let data;
-      if (validURL(msg.raw)) {
-        const response = await fetch(msg.raw);
-        data = await response.json();
-      } else {
-        data = JSON.parse(msg.raw);
-      }
-      // if (!Array.isArray(data)) throw new Error("Data must be an array");
+      let data = JSON.parse(msg.raw);
+      if (!Array.isArray(data)) data = [data];
       const selection = figma.currentPage.selection;
       if (selection.length === 0) {
-        figma.notify("Select at least one text or shape layer.");
+        figma.notify("Select at least one frame or group.");
         return;
       }
-      await populateNodesWithData(selection, data);
-      figma.notify("Data populated in selected layers.");
+      for (const node of selection) {
+        await recursivelyPopulate(node, data);
+      }
+      figma.notify("Data populated successfully.");
     } catch (e) {
       figma.notify("Invalid JSON: " + e.message);
     }
