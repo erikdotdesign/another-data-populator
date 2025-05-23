@@ -1,127 +1,174 @@
-figma.showUI(__html__, { width: 360, height: 420 });
-
-const IMAGEKIT_BASE = "https://ik.imagekit.io/erikdotdesign/another-data-populator/tr:f-png/";
-
-const getConvertedImageUrl = (webpUrl) => {
-  return IMAGEKIT_BASE + encodeURIComponent(webpUrl);
+const parseDataExpression = (name) => {
+  const match = name.match(/\{\{(\w+)(?:\s*\|\s*(\d+))?\}\}/);
+  return match ? { key: match[1], count: parseInt(match[2]) || 1 } : null;
 };
 
-const getValueByPath = (obj, path) => {
+const resolveKeyPath = (data, key) => {
   try {
-    return path.replace(/\[(\w+)\]/g, '.$1').split('.').reduce((o, p) => o?.[p], obj);
+    if (typeof data === 'string') return data;
+    return key
+      .replace(/\[(\d+)\]/g, '.$1')
+      .split('.')
+      .reduce((obj, prop) => (obj ? obj[prop] : undefined), data);
   } catch {
     return undefined;
   }
 };
 
-const populateTextNode = async (node, entry) => {
-  await figma.loadFontAsync(node.fontName);
-  const placeholders = node.characters.match(/\{\{(.*?)\}\}/g);
-  if (placeholders) {
-    let newText = node.characters;
-    for (const tag of placeholders) {
-      const key = tag.replace(/\{|\}/g, '').trim();
-      const value = typeof entry === 'string' ? entry : getValueByPath(entry, key);
-      if (value !== undefined) {
-        newText = newText.replace(tag, value);
+const imageKitConvertToPng = (url) => {
+  const path = encodeURIComponent(url);
+  return `https://ik.imagekit.io/erikdotdesign/another-data-populator/tr:fo-auto,f-png/${path}`;
+};
+
+const fetchImageWithFallback = async (primaryUrl, fallbackUrl) => {
+  try {
+    const res = await fetch(primaryUrl);
+    if (!res.ok) throw new Error('Primary image failed');
+    return await res.arrayBuffer();
+  } catch {
+    try {
+      const fallbackRes = await fetch(fallbackUrl);
+      if (!fallbackRes.ok) throw new Error('Fallback also failed');
+      return await fallbackRes.arrayBuffer();
+    } catch {
+      return null;
+    }
+  }
+};
+
+const applyImageFill = async (node, buffer) => {
+  const imageBytes = new Uint8Array(buffer);
+  const image = figma.createImage(imageBytes);
+  node.fills = [{ type: 'IMAGE', scaleMode: 'FILL', imageHash: image.hash }];
+};
+
+// --- Population Functions ---
+
+const populateTextNode = async (node, key, data) => {
+  const value = typeof data === 'string' ? data : resolveKeyPath(data, key);
+  if (typeof value === 'string' || typeof value === 'number') {
+    try {
+      await figma.loadFontAsync(node.fontName);
+      node.characters = String(value);
+    } catch (err) {
+      console.error('Font load error:', err);
+    }
+  }
+};
+
+const populateImageNode = async (node, key, data) => {
+  let url = typeof data === 'string' ? data : resolveKeyPath(data, key);
+  if (typeof url !== 'string') return;
+
+  const isWebp = url.endsWith('.webp');
+  if (isWebp) {
+    url = imageKitConvertToPng(url);
+  }
+
+  const fallback = `https://dummyjson.com/image/${node.width.toFixed(0)}x${node.height.toFixed(0)}?type=png&fontFamily=ubuntu`;
+  const buffer = await fetchImageWithFallback(url, fallback);
+  if (buffer) await applyImageFill(node, buffer);
+};
+
+const populateInstanceProperties = (node, data) => {
+  if ('componentProperties' in node && node.componentProperties) {
+    const props = node.componentProperties;
+    const updatedProps = {};
+    for (const [propName, propValue] of Object.entries(props)) {
+      if (typeof propValue.value === 'string') {
+        const placeholders = propValue.value.match(/\{\{(.*?)\}\}/g);
+        if (placeholders) {
+          let newValue = propValue.value;
+          for (const tag of placeholders) {
+            const key = tag.replace(/\{|\}/g, '').trim();
+            const resolved = typeof data === 'string' ? data : resolveKeyPath(data, key);
+            if (resolved !== undefined) {
+              newValue = newValue.replace(tag, resolved);
+            }
+          }
+          updatedProps[propName] = newValue;
+        }
       }
     }
-    node.characters = newText;
+    node.setProperties(updatedProps);
   }
 };
 
-const populateImageNode = async (node, entry) => {
-  const imageMatch = node.name.match(/^\{\{(.*?)\}\}$/);
-  if (!imageMatch) return;
-
-  const key = imageMatch[1].trim();
-  const url = typeof entry === 'string' ? entry : getValueByPath(entry, key);
-  let imageData = null;
-
-  let finalUrl = url;
-
-  if (url?.endsWith(".webp")) {
-    finalUrl = getConvertedImageUrl(url);
+const traverseAndPopulate = async (node, data) => {
+  if ('locked' in node && node.locked) return;
+  if ('children' in node && node.name.match(/\{\{\w+\s*\|\s*\d+\}\}/)) {
+    await cloneAndPopulateGroup(node, data);
+    return;
   }
 
-  try {
-    const response = await fetch(finalUrl);
-    const buffer = await response.arrayBuffer();
-    imageData = new Uint8Array(buffer);
-  } catch (err) {
-    const w = Math.round(node.width);
-    const h = Math.round(node.height);
-    const fallback = `https://dummyjson.com/image/${w}x${h}?type=png&fontFamily=ubuntu`;
-    const response = await fetch(fallback);
-    const buffer = await response.arrayBuffer();
-    imageData = new Uint8Array(buffer);
+  if ('children' in node) {
+    for (const child of node.children) {
+      await traverseAndPopulate(child, data);
+    }
+  } else {
+    const match = node.name.match(/\{\{(.+?)\}\}/);
+    if (match) {
+      if (node.type === 'TEXT') {
+        await populateTextNode(node, match[1], data);
+      } else if ('fills' in node && node.fills) {
+        await populateImageNode(node, match[1], data);
+      }
+    }
   }
 
-  if (imageData) {
-    const image = figma.createImage(imageData);
-    node.fills = [{ type: 'IMAGE', scaleMode: 'FILL', imageHash: image.hash }];
-  }
+  populateInstanceProperties(node, data);
 };
 
-const populateTemplateGroup = async (group, entries) => {
-  const match = group.name.match(/^\{\{(.*?)\s*\|\s*(\d+)\}\}$/);
-  if (!match || !Array.isArray(entries)) return;
+const cloneAndPopulateGroup = async (group, parentData) => {
+  const expr = parseDataExpression(group.name);
+  if (!expr) return;
 
-  const [, key, countStr] = match;
-  const count = parseInt(countStr);
-  let list = getValueByPath(entries[0], key);
+  const dataArray = resolveKeyPath(parentData, expr.key);
+  if (!Array.isArray(dataArray)) return;
 
-  if (!Array.isArray(list)) return;
-
-  const template = group.findChild(n => n.name === "{{template}}");
-  if (!template || !("clone" in template)) return;
+  const template = group.findOne(n => n.name === '{{template}}');
+  if (!template) return;
 
   const clones = [];
-  for (let i = 0; i < count && i < list.length; i++) {
+  for (let i = 0; i < Math.min(expr.count, dataArray.length); i++) {
     const clone = template.clone();
     clone.name = template.name;
     clone.relativeTransform = template.relativeTransform;
     group.appendChild(clone);
-    await recursivelyPopulate(clone, [list[i]]);
+    await traverseAndPopulate(clone, dataArray[i]);
     clones.push(clone);
   }
 
   template.remove();
 };
 
-const recursivelyPopulate = async (node, data) => {
-  if (node.type === 'TEXT') {
-    await populateTextNode(node, data[0]);
-  } else if ("fills" in node && Array.isArray(node.fills)) {
-    await populateImageNode(node, data[0]);
-  } else if ("children" in node) {
-    const templateGroupMatch = node.name.match(/^\{\{(.*?)\s*\|\s*(\d+)\}\}$/);
-    if (templateGroupMatch) {
-      await populateTemplateGroup(node, data);
-    } else {
-      for (const child of node.children) {
-        await recursivelyPopulate(child, data);
-      }
-    }
-  }
-};
+// --- Main Plugin Entry ---
 
-figma.ui.onmessage = async msg => {
-  if (msg.type === 'populate') {
-    try {
-      let data = JSON.parse(msg.raw);
-      if (!Array.isArray(data)) data = [data];
-      const selection = figma.currentPage.selection;
-      if (selection.length === 0) {
-        figma.notify("Select at least one frame or group.");
-        return;
-      }
-      for (const node of selection) {
-        await recursivelyPopulate(node, data);
-      }
-      figma.notify("Data populated successfully.");
-    } catch (e) {
-      figma.notify("Invalid JSON: " + e.message);
+figma.showUI(__html__, { width: 400, height: 500 });
+
+figma.ui.onmessage = async (msg) => {
+  if (msg.type === 'populate' && msg.data) {
+    const selection = figma.currentPage.selection;
+    if (selection.length === 0) {
+      figma.notify('Select at least one frame or group.');
+      return;
     }
+
+    const isArray = Array.isArray(msg.data);
+
+    for (const node of selection) {
+      if (isArray) {
+        const keyMatch = node.name.match(/\{\{(\w+)\s*\|\s*\d+\}\}/);
+        const key = keyMatch ? keyMatch[1] : 'items';
+        const wrapper = {};
+        wrapper[key] = msg.data;
+        await traverseAndPopulate(node, wrapper);
+      } else {
+        await traverseAndPopulate(node, msg.data);
+      }
+    }
+
+    figma.notify('Data populated.');
+    figma.closePlugin();
   }
 };
