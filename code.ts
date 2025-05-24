@@ -60,6 +60,9 @@ const populateImageNode = async (node, key, data) => {
   let url = typeof data === 'string' ? data : resolveKeyPath(data, key);
   if (typeof url !== 'string') return;
 
+  const isImageAsset = url.match(/\.(webp|png|jpe?g|gif)(\?.*)?$/i);
+  if (!isImageAsset) return;
+
   const isWebp = url.endsWith('.webp');
   if (isWebp) {
     url = imageKitConvertToPng(url);
@@ -96,6 +99,22 @@ const populateInstanceProperties = (node, data) => {
 
 const traverseAndPopulate = async (node, data) => {
   if ('locked' in node && node.locked) return;
+
+  populateInstanceProperties(node, data);
+
+  const match = node.name.match(/\{\{(.+?)\}\}/);
+  const hasAssetFill = Array.isArray(node.fills) && node.fills.some(f => f.isAsset);
+
+  if (match) {
+    if (node.type === 'TEXT') {
+      await populateTextNode(node, match[1], data);
+    } else if ('fills' in node && node.fills) {
+      await populateImageNode(node, match[1], data);
+    }
+  } else if (hasAssetFill && 'fills' in node) {
+    await populateImageNode(node, node.name.replace(/[{}]/g, '').trim(), data);
+  }
+
   if ('children' in node && node.name.match(/\{\{\w+\s*\|\s*\d+\}\}/)) {
     await cloneAndPopulateGroup(node, data);
     return;
@@ -105,18 +124,7 @@ const traverseAndPopulate = async (node, data) => {
     for (const child of node.children) {
       await traverseAndPopulate(child, data);
     }
-  } else {
-    const match = node.name.match(/\{\{(.+?)\}\}/);
-    if (match) {
-      if (node.type === 'TEXT') {
-        await populateTextNode(node, match[1], data);
-      } else if ('fills' in node && node.fills) {
-        await populateImageNode(node, match[1], data);
-      }
-    }
   }
-
-  populateInstanceProperties(node, data);
 };
 
 const cloneAndPopulateGroup = async (group, parentData) => {
@@ -129,17 +137,19 @@ const cloneAndPopulateGroup = async (group, parentData) => {
   const template = group.findOne(n => n.name === '{{template}}');
   if (!template) return;
 
-  const clones = [];
-  for (let i = 0; i < Math.min(expr.count, dataArray.length); i++) {
-    const clone = template.clone();
-    clone.name = template.name;
-    clone.relativeTransform = template.relativeTransform;
-    group.appendChild(clone);
-    await traverseAndPopulate(clone, dataArray[i]);
-    clones.push(clone);
-  }
+  const count = Math.min(expr.count, dataArray.length);
 
-  template.remove();
+  for (let i = 0; i < count; i++) {
+    if (i < count - 1) {
+      const clone = template.clone();
+      clone.name = template.name;
+      clone.relativeTransform = template.relativeTransform;
+      group.appendChild(clone);
+      await traverseAndPopulate(clone, dataArray[i]);
+    } else {
+      await traverseAndPopulate(template, dataArray[i]);
+    }
+  }
 };
 
 // --- Main Plugin Entry ---
