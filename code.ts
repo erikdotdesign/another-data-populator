@@ -112,99 +112,88 @@ const parseVariantDirectives = (name) => {
   const matches = [...name.matchAll(/#variant\[(.+?)\]/g)];
   if (!matches.length) return [];
 
-  const directives = [];
-
-  for (const match of matches) {
+  return matches.map(match => {
     const content = match[1];
-    const [rawCondition, rawSetter] = content.split(',').map(s => s.trim());
+    const [conditionStr, setterStr] = content.split(',').map(s => s.trim());
 
-    const operators = ['==', '!=', '>=', '<=', '>', '<', 'in', 'not in'];
-    const operatorMatch = operators.find(op => rawCondition.includes(op));
-    if (!operatorMatch) continue;
+    if (!conditionStr || !setterStr) return null;
+    const [propName, propValue] = setterStr.split('=').map(s => s.trim());
+    if (!propName || !propValue) return null;
 
-    const parts = rawCondition.split(operatorMatch).map(p => p.trim());
-    const keyPathMatch = parts[0].match(/{{(.+?)}}/);
-    if (!keyPathMatch) continue;
-
-    const keyPath = keyPathMatch[1];
-    const expectedRaw = parts[1];
-    const [propName, propValue] = rawSetter.split('=').map(s => s.trim());
-
-    directives.push({
-      keyPath,
-      operator: operatorMatch,
-      expectedValue: parseJSONValue(expectedRaw),
+    return {
+      conditionStr,
       propName,
       propValue,
-    });
-  }
+    };
+  }).filter(Boolean);
+};
 
-  return directives;
-}
+const evaluateLogicalExpression = (expression, data) => {
+  const replaced = expression.replace(/{{(.*?)}}/g, (_, keyPath) => {
+    const value = resolveKeyPath(data, keyPath.trim());
+    return typeof value === 'string' ? `"${value}"` : String(value);
+  });
 
-const evaluateVariantCondition = (actualValue, expectedValue, operator) => {
-  switch (operator) {
-    case '==': return actualValue == expectedValue;
-    case '!=': return actualValue != expectedValue;
-    case '>': return actualValue > expectedValue;
-    case '>=': return actualValue >= expectedValue;
-    case '<': return actualValue < expectedValue;
-    case '<=': return actualValue <= expectedValue;
-    case 'in':
-      return Array.isArray(expectedValue)
-        ? expectedValue.includes(actualValue)
-        : typeof expectedValue === 'string' && expectedValue.includes(actualValue);
-    case 'not in':
-      return Array.isArray(expectedValue)
-        ? !expectedValue.includes(actualValue)
-        : typeof expectedValue === 'string' && !expectedValue.includes(actualValue);
-    default: return false;
-  }
-}
-
-const parseJSONValue = (str) => {
   try {
-    return JSON.parse(str);
-  } catch {
-    return str; // fallback to string if JSON.parse fails
+    // Safe eval pattern: no access to scope, only evaluated values
+    return Function(`"use strict"; return (${replaced});`)();
+  } catch (e) {
+    console.warn('Failed to evaluate variant expression:', expression, e);
+    return false;
   }
-}
+};
+
+const findActualPropKey = (name, props) => {
+  return Object.keys(props).find(key => key.split('#')[0] === name);
+};
 
 const populateInstanceProperties = (node, data) => {
   if ('componentProperties' in node && node.componentProperties) {
     const props = node.componentProperties;
     const updatedProps = {};
 
-    // Handle {{...}} expressions
+    // --- Handle {{...}} expressions ---
     for (const [propName, propValue] of Object.entries(props)) {
       if (typeof propValue.value === 'string') {
         const placeholders = propValue.value.match(/{{(.*?)}}/g);
         if (placeholders) {
           let newValue = propValue.value;
+
           for (const tag of placeholders) {
             const expr = parseDataExpression(tag);
             if (!expr) continue;
+
             let resolved = typeof data === 'string' ? data : resolveKeyPath(data, expr.key);
             if (resolved !== undefined) {
               resolved = applyFiltersToValue(String(resolved), expr.filters, data);
               newValue = newValue.replace(tag, resolved);
             }
           }
-          updatedProps[propName] = newValue;
+
+          const actualPropKey = findActualPropKey(propName.split('#')[0], props);
+          if (actualPropKey) {
+            updatedProps[actualPropKey] = newValue;
+          }
         }
       }
     }
 
-    // Handle #variant[...] expressions
+    // --- Handle #variant[...] expressions ---
     const variantDirectives = parseVariantDirectives(node.name);
     for (const directive of variantDirectives) {
-      const actualValue = resolveKeyPath(data, directive.keyPath);
-      if (evaluateVariantCondition(actualValue, directive.expectedValue, directive.operator)) {
-        updatedProps[directive.propName] = directive.propValue;
+      if (evaluateLogicalExpression(directive.conditionStr, data)) {
+        let value = directive.propValue;
+
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+
+        const actualPropKey = findActualPropKey(directive.propName, props);
+        if (actualPropKey) {
+          updatedProps[actualPropKey] = value;
+        }
       }
     }
 
-    // Apply all resolved props
     node.setProperties(updatedProps);
   }
 };
