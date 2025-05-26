@@ -108,10 +108,74 @@ const populateImageNode = async (node, key, data) => {
   if (buffer) await applyImageFill(node, buffer);
 };
 
+const parseVariantDirectives = (name) => {
+  const matches = [...name.matchAll(/#variant\[(.+?)\]/g)];
+  if (!matches.length) return [];
+
+  const directives = [];
+
+  for (const match of matches) {
+    const content = match[1];
+    const [rawCondition, rawSetter] = content.split(',').map(s => s.trim());
+
+    const operators = ['==', '!=', '>=', '<=', '>', '<', 'in', 'not in'];
+    const operatorMatch = operators.find(op => rawCondition.includes(op));
+    if (!operatorMatch) continue;
+
+    const parts = rawCondition.split(operatorMatch).map(p => p.trim());
+    const keyPathMatch = parts[0].match(/{{(.+?)}}/);
+    if (!keyPathMatch) continue;
+
+    const keyPath = keyPathMatch[1];
+    const expectedRaw = parts[1];
+    const [propName, propValue] = rawSetter.split('=').map(s => s.trim());
+
+    directives.push({
+      keyPath,
+      operator: operatorMatch,
+      expectedValue: parseJSONValue(expectedRaw),
+      propName,
+      propValue,
+    });
+  }
+
+  return directives;
+}
+
+const evaluateVariantCondition = (actualValue, expectedValue, operator) => {
+  switch (operator) {
+    case '==': return actualValue == expectedValue;
+    case '!=': return actualValue != expectedValue;
+    case '>': return actualValue > expectedValue;
+    case '>=': return actualValue >= expectedValue;
+    case '<': return actualValue < expectedValue;
+    case '<=': return actualValue <= expectedValue;
+    case 'in':
+      return Array.isArray(expectedValue)
+        ? expectedValue.includes(actualValue)
+        : typeof expectedValue === 'string' && expectedValue.includes(actualValue);
+    case 'not in':
+      return Array.isArray(expectedValue)
+        ? !expectedValue.includes(actualValue)
+        : typeof expectedValue === 'string' && !expectedValue.includes(actualValue);
+    default: return false;
+  }
+}
+
+const parseJSONValue = (str) => {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return str; // fallback to string if JSON.parse fails
+  }
+}
+
 const populateInstanceProperties = (node, data) => {
   if ('componentProperties' in node && node.componentProperties) {
     const props = node.componentProperties;
     const updatedProps = {};
+
+    // Handle {{...}} expressions
     for (const [propName, propValue] of Object.entries(props)) {
       if (typeof propValue.value === 'string') {
         const placeholders = propValue.value.match(/{{(.*?)}}/g);
@@ -130,6 +194,17 @@ const populateInstanceProperties = (node, data) => {
         }
       }
     }
+
+    // Handle #variant[...] expressions
+    const variantDirectives = parseVariantDirectives(node.name);
+    for (const directive of variantDirectives) {
+      const actualValue = resolveKeyPath(data, directive.keyPath);
+      if (evaluateVariantCondition(actualValue, directive.expectedValue, directive.operator)) {
+        updatedProps[directive.propName] = directive.propValue;
+      }
+    }
+
+    // Apply all resolved props
     node.setProperties(updatedProps);
   }
 };
