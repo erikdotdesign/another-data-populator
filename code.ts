@@ -1,6 +1,18 @@
 const parseDataExpression = (name) => {
-  const match = name.match(/\{\{(\w+)(?:\s*\|\s*(\d+))?\}\}/);
-  return match ? { key: match[1], count: parseInt(match[2]) || 1 } : null;
+  const match = name.match(/{{(.*?)}}/);
+  if (!match) return null;
+
+  const parts = match[1].split('|').map(p => p.trim());
+  const key = parts[0];
+  const filters = parts.slice(1).reduce((acc, part) => {
+    const [filterName, ...args] = part.split(/\s+/);
+    acc[filterName] = args.length
+      ? args.map(arg => isNaN(arg) ? arg : Number(arg))
+      : true;
+    return acc;
+  }, {});
+
+  return { key, filters };
 };
 
 const resolveKeyPath = (data, key) => {
@@ -13,6 +25,21 @@ const resolveKeyPath = (data, key) => {
   } catch {
     return undefined;
   }
+};
+
+const applyFiltersToValue = (value, filters) => {
+  if (typeof value !== 'string') return value;
+
+  if (filters.max) {
+    value = value.slice(0, filters.max[0]);
+  }
+  if (filters.date) {
+    const date = new Date(value);
+    if (!isNaN(date)) {
+      value = date.toLocaleDateString();
+    }
+  }
+  return value;
 };
 
 const imageKitConvertToPng = (url) => {
@@ -44,12 +71,16 @@ const applyImageFill = async (node, buffer) => {
 
 // --- Population Functions ---
 
-const populateTextNode = async (node, key, data) => {
-  const value = typeof data === 'string' ? data : resolveKeyPath(data, key);
+const populateTextNode = async (node, keyPath, data) => {
+  const expr = parseDataExpression(`{{${keyPath}}}`);
+  if (!expr) return;
+
+  let value = typeof data === 'string' ? data : resolveKeyPath(data, expr.key);
   if (typeof value === 'string' || typeof value === 'number') {
+    value = applyFiltersToValue(String(value), expr.filters);
     try {
       await figma.loadFontAsync(node.fontName);
-      node.characters = String(value);
+      node.characters = value;
     } catch (err) {
       console.error('Font load error:', err);
     }
@@ -60,7 +91,7 @@ const populateImageNode = async (node, key, data) => {
   let url = typeof data === 'string' ? data : resolveKeyPath(data, key);
   if (typeof url !== 'string') return;
 
-  const isImageAsset = url.match(/\.(webp|png|jpe?g|gif)(\?.*)?$/i);
+  const isImageAsset = url.match(/\.(webp|png|jpe?g|gif|svg)(\?.*)?$/i);
   if (!isImageAsset) return;
 
   const isWebp = url.endsWith('.webp');
@@ -79,13 +110,15 @@ const populateInstanceProperties = (node, data) => {
     const updatedProps = {};
     for (const [propName, propValue] of Object.entries(props)) {
       if (typeof propValue.value === 'string') {
-        const placeholders = propValue.value.match(/\{\{(.*?)\}\}/g);
+        const placeholders = propValue.value.match(/{{(.*?)}}/g);
         if (placeholders) {
           let newValue = propValue.value;
           for (const tag of placeholders) {
-            const key = tag.replace(/\{|\}/g, '').trim();
-            const resolved = typeof data === 'string' ? data : resolveKeyPath(data, key);
+            const expr = parseDataExpression(tag);
+            if (!expr) continue;
+            let resolved = typeof data === 'string' ? data : resolveKeyPath(data, expr.key);
             if (resolved !== undefined) {
+              resolved = applyFiltersToValue(String(resolved), expr.filters);
               newValue = newValue.replace(tag, resolved);
             }
           }
@@ -102,7 +135,7 @@ const traverseAndPopulate = async (node, data) => {
 
   populateInstanceProperties(node, data);
 
-  const match = node.name.match(/\{\{(.+?)\}\}/);
+  const match = node.name.match(/{{(.+?)}}/);
   const hasAssetFill = Array.isArray(node.fills) && node.fills.some(f => f.isAsset);
 
   if (match) {
@@ -115,9 +148,8 @@ const traverseAndPopulate = async (node, data) => {
     await populateImageNode(node, node.name.replace(/[{}]/g, '').trim(), data);
   }
 
-  if ('children' in node && node.name.match(/\{\{\w+\s*\|\s*\d+\}\}/)) {
+  if ('children' in node && node.name.match(/{{\w+(\s*\|.*)?}}/)) {
     await cloneAndPopulateGroup(node, data);
-    return;
   }
 
   if ('children' in node) {
@@ -131,13 +163,20 @@ const cloneAndPopulateGroup = async (group, parentData) => {
   const expr = parseDataExpression(group.name);
   if (!expr) return;
 
-  const dataArray = resolveKeyPath(parentData, expr.key);
-  if (!Array.isArray(dataArray)) return;
+  let array = resolveKeyPath(parentData, expr.key);
+  if (!Array.isArray(array)) return;
+
+  if (expr.filters.skip) {
+    array = array.slice(expr.filters.skip[0]);
+  }
+  if (expr.filters.limit) {
+    array = array.slice(0, expr.filters.limit[0]);
+  }
 
   const template = group.findOne(n => n.name === '{{template}}');
   if (!template) return;
 
-  const count = Math.min(expr.count, dataArray.length);
+  const count = array.length;
 
   for (let i = 0; i < count; i++) {
     if (i < count - 1) {
@@ -145,9 +184,9 @@ const cloneAndPopulateGroup = async (group, parentData) => {
       clone.name = template.name;
       clone.relativeTransform = template.relativeTransform;
       group.appendChild(clone);
-      await traverseAndPopulate(clone, dataArray[i]);
+      await traverseAndPopulate(clone, array[i]);
     } else {
-      await traverseAndPopulate(template, dataArray[i]);
+      await traverseAndPopulate(template, array[i]);
     }
   }
 };
@@ -168,7 +207,7 @@ figma.ui.onmessage = async (msg) => {
 
     for (const node of selection) {
       if (isArray) {
-        const keyMatch = node.name.match(/\{\{(\w+)\s*\|\s*\d+\}\}/);
+        const keyMatch = node.name.match(/{{(\w+)\s*(\|.*?)?}}/);
         const key = keyMatch ? keyMatch[1] : 'items';
         const wrapper = {};
         wrapper[key] = msg.data;
