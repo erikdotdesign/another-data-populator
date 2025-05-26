@@ -27,18 +27,24 @@ const resolveKeyPath = (data, key) => {
   }
 };
 
-const applyFiltersToValue = (value, filters) => {
+const applyFiltersToValue = (value, filters, data) => {
   if (typeof value !== 'string') return value;
 
   if (filters.max) {
-    value = value.slice(0, filters.max[0]);
+    const arg = filters.max[0];
+    const limit = typeof arg === 'string' ? resolveKeyPath(data, arg) : arg;
+    if (typeof limit === 'number') {
+      value = value.slice(0, limit);
+    }
   }
+
   if (filters.date) {
     const date = new Date(value);
     if (!isNaN(date)) {
       value = date.toLocaleDateString();
     }
   }
+
   return value;
 };
 
@@ -69,15 +75,13 @@ const applyImageFill = async (node, buffer) => {
   node.fills = [{ type: 'IMAGE', scaleMode: 'FILL', imageHash: image.hash }];
 };
 
-// --- Population Functions ---
-
 const populateTextNode = async (node, keyPath, data) => {
   const expr = parseDataExpression(`{{${keyPath}}}`);
   if (!expr) return;
 
   let value = typeof data === 'string' ? data : resolveKeyPath(data, expr.key);
   if (typeof value === 'string' || typeof value === 'number') {
-    value = applyFiltersToValue(String(value), expr.filters);
+    value = applyFiltersToValue(String(value), expr.filters, data);
     try {
       await figma.loadFontAsync(node.fontName);
       node.characters = value;
@@ -118,7 +122,7 @@ const populateInstanceProperties = (node, data) => {
             if (!expr) continue;
             let resolved = typeof data === 'string' ? data : resolveKeyPath(data, expr.key);
             if (resolved !== undefined) {
-              resolved = applyFiltersToValue(String(resolved), expr.filters);
+              resolved = applyFiltersToValue(String(resolved), expr.filters, data);
               newValue = newValue.replace(tag, resolved);
             }
           }
@@ -130,9 +134,42 @@ const populateInstanceProperties = (node, data) => {
   }
 };
 
-const traverseAndPopulate = async (node, data) => {
+const traverseAndPopulate = async (node, data, skipDuplicate = false) => {
   if ('locked' in node && node.locked) return;
 
+  const expr = parseDataExpression(node.name);
+  const shouldDuplicate = !skipDuplicate && expr && 'duplicate' in expr.filters;
+
+  // --- Handle duplication: insert before node to preserve order ---
+  if (shouldDuplicate && 'clone' in node && node.parent) {
+    const rawCount = expr.filters.duplicate[0];
+    const count = typeof rawCount === 'string' ? resolveKeyPath(data, rawCount) : rawCount;
+
+    if (typeof count === 'number' && count > 1) {
+      const cleanName = node.name.replace(/\|\s*duplicate\s+[^\|}]+/, '').trim();
+      const parent = node.parent;
+      const index = parent.children.indexOf(node);
+
+      // Clone in reverse order so they appear above the original
+      for (let i = count - 1; i >= 0; i--) {
+        const isOriginal = i === 0;
+        const targetNode = isOriginal ? node : node.clone();
+
+        targetNode.name = cleanName;
+        targetNode.relativeTransform = node.relativeTransform;
+
+        if (!isOriginal) {
+          parent.insertChild(index, targetNode); // Insert before the original
+        }
+
+        await traverseAndPopulate(targetNode, data, true); // ✅ skip duplicate logic for clones
+      }
+
+      return; // We've handled population, so exit early
+    }
+  }
+
+  // --- Populate self ---
   populateInstanceProperties(node, data);
 
   const match = node.name.match(/{{(.+?)}}/);
@@ -148,12 +185,15 @@ const traverseAndPopulate = async (node, data) => {
     await populateImageNode(node, node.name.replace(/[{}]/g, '').trim(), data);
   }
 
+  // --- Handle array groups like {{items}} ---
   if ('children' in node && node.name.match(/{{\w+(\s*\|.*)?}}/)) {
     await cloneAndPopulateGroup(node, data);
   }
 
+  // --- Traverse original children only ---
   if ('children' in node) {
-    for (const child of node.children) {
+    const childrenToTraverse = [...node.children];
+    for (const child of childrenToTraverse) {
       await traverseAndPopulate(child, data);
     }
   }
@@ -183,15 +223,17 @@ const cloneAndPopulateGroup = async (group, parentData) => {
       const clone = template.clone();
       clone.name = template.name;
       clone.relativeTransform = template.relativeTransform;
-      group.appendChild(clone);
+      
+      // Insert the clone BEFORE the template
+      const index = group.children.indexOf(template);
+      group.insertChild(index, clone);
+
       await traverseAndPopulate(clone, array[i]);
     } else {
       await traverseAndPopulate(template, array[i]);
     }
   }
 };
-
-// --- Main Plugin Entry ---
 
 figma.showUI(__html__, { width: 400, height: 500 });
 
