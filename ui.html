@@ -11,6 +11,11 @@
         gap: 10px;
       }
 
+      h3 {
+        padding: 0;
+        margin: 10px 0;
+      }
+
       select,
       textarea,
       button,
@@ -65,9 +70,9 @@
     </style>
   </head>
   <body>
-    <h2>Dummy Data Populator</h2>
+    <h3>Another Data Populator</h3>
 
-    <label for="endpoint">Select Preset Dummy JSON</label>
+    <label for="endpoint">Select Preset JSON</label>
     <select id="endpoint">
       <option value="">-- Choose a preset --</option>
       <option value="products">Products</option>
@@ -80,6 +85,7 @@
       <option value="quotes">Quotes</option>
     </select>
 
+    <label>Import JSON</label>
     <label for="fileInput" class="import-btn">Import JSON File</label>
     <input type="file" id="fileInput" accept=".json" style="display: none;" />
 
@@ -122,18 +128,20 @@
       });
 
       // Import JSON file
-      fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
+      fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = (e) => {
           try {
-            const text = event.target.result;
-            JSON.parse(text);  // validate JSON
-            jsonTextarea.value = text;
+            const parsed = JSON.parse(e.target.result);
+            jsonTextarea.value = JSON.stringify(parsed, null, 2); // prettify and populate
           } catch (err) {
-            alert('Invalid JSON file');
+            alert('Invalid JSON file.');
+          } finally {
+            fileInput.value = ''; // Reset input to allow re-uploading the same file
+            endpointSelect.value = '';
           }
         };
         reader.readAsText(file);
