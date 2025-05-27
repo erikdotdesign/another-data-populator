@@ -1,5 +1,5 @@
 const parseDataExpression = (name) => {
-  const match = name.match(/{{(.*?)}}/);
+  const match = name.match(/{{\s*([^{}]+?)\s*}}/);
   if (!match) return null;
 
   const parts = match[1].split('|').map(p => p.trim());
@@ -27,24 +27,20 @@ const resolveKeyPath = (data, key) => {
   }
 };
 
+const filtersMap = {
+  max: (val, args, data) => val.slice(0, resolveKeyPath(data, args[0]) ?? args[0]),
+  date: (val) => {
+    const d = new Date(val);
+    return isNaN(d) ? val : d.toLocaleDateString();
+  },
+};
+
 const applyFiltersToValue = (value, filters, data) => {
-  if (typeof value !== 'string') return value;
-
-  if (filters.max) {
-    const arg = filters.max[0];
-    const limit = typeof arg === 'string' ? resolveKeyPath(data, arg) : arg;
-    if (typeof limit === 'number') {
-      value = value.slice(0, limit);
+  for (const [filter, args] of Object.entries(filters)) {
+    if (filtersMap[filter]) {
+      value = filtersMap[filter](value, args, data);
     }
   }
-
-  if (filters.date) {
-    const date = new Date(value);
-    if (!isNaN(date)) {
-      value = date.toLocaleDateString();
-    }
-  }
-
   return value;
 };
 
@@ -53,20 +49,23 @@ const imageKitConvertToPng = (url) => {
   return `https://ik.imagekit.io/erikdotdesign/another-data-populator/tr:fo-auto,f-png/${path}`;
 };
 
-const fetchImageWithFallback = async (primaryUrl, fallbackUrl) => {
+const tryFetchImage = async (url) => {
   try {
-    const res = await fetch(primaryUrl);
-    if (!res.ok) throw new Error('Primary image failed');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Image failed to load');
     return await res.arrayBuffer();
-  } catch {
-    try {
-      const fallbackRes = await fetch(fallbackUrl);
-      if (!fallbackRes.ok) throw new Error('Fallback also failed');
-      return await fallbackRes.arrayBuffer();
-    } catch {
-      return null;
-    }
+  } catch (err) {
+    console.warn(`Failed to fetch image: ${url}`, err);
+    return null;
   }
+};
+
+const fetchImageWithFallbacks = async (urls: string[]) => {
+  for (const url of urls) {
+    const buffer = await tryFetchImage(url);
+    if (buffer) return buffer;
+  }
+  return null;
 };
 
 const applyImageFill = async (node, buffer) => {
@@ -86,7 +85,8 @@ const populateTextNode = async (node, keyPath, data) => {
       await figma.loadFontAsync(node.fontName);
       node.characters = value;
     } catch (err) {
-      console.error('Font load error:', err);
+      figma.notify(`Missing font: ${node.fontName.family}`);
+      console.error('Font error:', err);
     }
   }
 };
@@ -98,14 +98,25 @@ const populateImageNode = async (node, key, data) => {
   const isImageAsset = url.match(/\.(webp|png|jpe?g|gif|svg)(\?.*)?$/i);
   if (!isImageAsset) return;
 
-  const isWebp = url.endsWith('.webp');
-  if (isWebp) {
-    url = imageKitConvertToPng(url);
+  const urls = [];
+
+  // 1. Convert webp to PNG if needed
+  if (url.endsWith('.webp')) {
+    urls.push(imageKitConvertToPng(url));
+  } else {
+    urls.push(url);
   }
 
-  const fallback = `https://dummyjson.com/image/${node.width.toFixed(0)}x${node.height.toFixed(0)}?type=png&fontFamily=ubuntu`;
-  const buffer = await fetchImageWithFallback(url, fallback);
-  if (buffer) await applyImageFill(node, buffer);
+  // 2. Dynamic fallback from DummyJSON
+  const dummyFallback = `https://dummyjson.com/image/${node.width.toFixed(0)}x${node.height.toFixed(0)}?type=png&fontFamily=ubuntu`;
+  urls.push(dummyFallback);
+
+  const buffer = await fetchImageWithFallbacks(urls);
+  if (buffer) {
+    await applyImageFill(node, buffer);
+  } else {
+    console.warn('All image fallbacks failed for node:', node.name);
+  }
 };
 
 const parseVariantDirectives = (name) => {
@@ -199,8 +210,6 @@ const populateInstanceProperties = (node, data) => {
 };
 
 const traverseAndPopulate = async (node, data, skipDuplicate = false) => {
-  if ('locked' in node && node.locked) return;
-
   const expr = parseDataExpression(node.name);
   const shouldDuplicate = !skipDuplicate && expr && 'duplicate' in expr.filters;
 
