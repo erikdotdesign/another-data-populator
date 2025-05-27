@@ -119,6 +119,33 @@ const populateImageNode = async (node, key, data) => {
   }
 };
 
+const stripVisibilityDirectives = (node: SceneNode) => {
+  node.name = node.name
+    .replace(/#show\[[^\]]*\]/g, '')
+    .replace(/#hide\[[^\]]*\]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+};
+
+const handleVisibilityDirectives = (node, data) => {
+  const showMatch = node.name.match(/#show\[(.+?)\]/);
+  const hideMatch = node.name.match(/#hide\[(.+?)\]/);
+
+  if (showMatch) {
+    const condition = showMatch[1];
+    const result = evaluateLogicalExpression(condition, data);
+    node.visible = !!result;
+  }
+
+  if (hideMatch) {
+    const condition = hideMatch[1];
+    const result = evaluateLogicalExpression(condition, data);
+    node.visible = !result;
+  }
+
+  stripVisibilityDirectives(node);
+};
+
 const parseVariantDirectives = (name) => {
   const matches = [...name.matchAll(/#variant\[(.+?)\]/g)];
   if (!matches.length) return [];
@@ -241,6 +268,9 @@ const traverseAndPopulate = async (node, data, skipDuplicate = false) => {
       return; // We've handled population, so exit early
     }
   }
+
+  // --- Handle visibility directives  ---
+  handleVisibilityDirectives(node, data);
 
   // --- Populate self ---
   populateInstanceProperties(node, data);
