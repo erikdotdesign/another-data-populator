@@ -1,3 +1,5 @@
+// --- Expressions ---
+
 const parseDataExpression = (name) => {
   const match = name.match(/{{\s*([^{}]+?)\s*}}/);
   if (!match) return null;
@@ -27,6 +29,8 @@ const resolveKeyPath = (data, key) => {
   }
 };
 
+// --- Filters ---
+
 const filtersMap = {
   max: (val, args, data) => val.slice(0, resolveKeyPath(data, args[0]) ?? args[0]),
   date: (val) => {
@@ -43,6 +47,8 @@ const applyFiltersToValue = (value, filters, data) => {
   }
   return value;
 };
+
+// --- Images ---
 
 const imageKitConvertToPng = (url) => {
   const path = encodeURIComponent(url);
@@ -73,6 +79,79 @@ const applyImageFill = async (node, buffer) => {
   const image = figma.createImage(imageBytes);
   node.fills = [{ type: 'IMAGE', scaleMode: 'FILL', imageHash: image.hash }];
 };
+
+
+// --- Visibility ---
+
+const evaluateLogicalExpression = (expression, data) => {
+  const replaced = expression.replace(/{{(.*?)}}/g, (_, keyPath) => {
+    const value = resolveKeyPath(data, keyPath.trim());
+    return typeof value === 'string' ? `"${value}"` : String(value);
+  });
+
+  try {
+    // Safe eval pattern: no access to scope, only evaluated values
+    return Function(`"use strict"; return (${replaced});`)();
+  } catch (e) {
+    console.warn('Failed to evaluate variant expression:', expression, e);
+    return false;
+  }
+};
+
+const stripVisibilityDirectives = (node: SceneNode) => {
+  node.name = node.name
+    .replace(/#show\[[^\]]*\]/g, '')
+    .replace(/#hide\[[^\]]*\]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+};
+
+const handleVisibilityDirectives = (node, data) => {
+  const showMatch = node.name.match(/#show\[(.+?)\]/);
+  const hideMatch = node.name.match(/#hide\[(.+?)\]/);
+
+  if (showMatch) {
+    const condition = showMatch[1];
+    const result = evaluateLogicalExpression(condition, data);
+    node.visible = !!result;
+  }
+
+  if (hideMatch) {
+    const condition = hideMatch[1];
+    const result = evaluateLogicalExpression(condition, data);
+    node.visible = !result;
+  }
+
+  stripVisibilityDirectives(node);
+};
+
+// --- Variants ---
+
+const parseVariantDirectives = (name) => {
+  const matches = [...name.matchAll(/#variant\[(.+?)\]/g)];
+  if (!matches.length) return [];
+
+  return matches.map(match => {
+    const content = match[1];
+    const [conditionStr, setterStr] = content.split(',').map(s => s.trim());
+
+    if (!conditionStr || !setterStr) return null;
+    const [propName, propValue] = setterStr.split('=').map(s => s.trim());
+    if (!propName || !propValue) return null;
+
+    return {
+      conditionStr,
+      propName,
+      propValue,
+    };
+  }).filter(Boolean);
+};
+
+const findActualPropKey = (name, props) => {
+  return Object.keys(props).find(key => key.split('#')[0] === name);
+};
+
+// --- Populate ---
 
 const populateTextNode = async (node, keyPath, data) => {
   const expr = parseDataExpression(`{{${keyPath}}}`);
@@ -117,72 +196,6 @@ const populateImageNode = async (node, key, data) => {
   } else {
     console.warn('All image fallbacks failed for node:', node.name);
   }
-};
-
-const stripVisibilityDirectives = (node: SceneNode) => {
-  node.name = node.name
-    .replace(/#show\[[^\]]*\]/g, '')
-    .replace(/#hide\[[^\]]*\]/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-};
-
-const handleVisibilityDirectives = (node, data) => {
-  const showMatch = node.name.match(/#show\[(.+?)\]/);
-  const hideMatch = node.name.match(/#hide\[(.+?)\]/);
-
-  if (showMatch) {
-    const condition = showMatch[1];
-    const result = evaluateLogicalExpression(condition, data);
-    node.visible = !!result;
-  }
-
-  if (hideMatch) {
-    const condition = hideMatch[1];
-    const result = evaluateLogicalExpression(condition, data);
-    node.visible = !result;
-  }
-
-  stripVisibilityDirectives(node);
-};
-
-const parseVariantDirectives = (name) => {
-  const matches = [...name.matchAll(/#variant\[(.+?)\]/g)];
-  if (!matches.length) return [];
-
-  return matches.map(match => {
-    const content = match[1];
-    const [conditionStr, setterStr] = content.split(',').map(s => s.trim());
-
-    if (!conditionStr || !setterStr) return null;
-    const [propName, propValue] = setterStr.split('=').map(s => s.trim());
-    if (!propName || !propValue) return null;
-
-    return {
-      conditionStr,
-      propName,
-      propValue,
-    };
-  }).filter(Boolean);
-};
-
-const evaluateLogicalExpression = (expression, data) => {
-  const replaced = expression.replace(/{{(.*?)}}/g, (_, keyPath) => {
-    const value = resolveKeyPath(data, keyPath.trim());
-    return typeof value === 'string' ? `"${value}"` : String(value);
-  });
-
-  try {
-    // Safe eval pattern: no access to scope, only evaluated values
-    return Function(`"use strict"; return (${replaced});`)();
-  } catch (e) {
-    console.warn('Failed to evaluate variant expression:', expression, e);
-    return false;
-  }
-};
-
-const findActualPropKey = (name, props) => {
-  return Object.keys(props).find(key => key.split('#')[0] === name);
 };
 
 const populateInstanceProperties = (node, data) => {
@@ -337,6 +350,8 @@ const cloneAndPopulateGroup = async (group, parentData) => {
     }
   }
 };
+
+// --- Main ----
 
 figma.showUI(__html__, { width: 400, height: 500 });
 
