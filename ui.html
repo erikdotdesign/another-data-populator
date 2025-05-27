@@ -10,20 +10,64 @@
         flex-direction: column;
         gap: 10px;
       }
-      select, textarea, button {
+
+      select,
+      textarea,
+      button,
+      .import-btn {
         font-size: 14px;
         padding: 8px;
         width: 100%;
+        box-sizing: border-box;
       }
+
       textarea {
         height: 200px;
         resize: vertical;
+        font-family: monospace;
+        line-height: 1.4;
+        white-space: pre;
+        overflow: auto;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        transition: border-color 0.3s;
+      }
+
+      textarea.invalid {
+        border-color: red;
+      }
+
+      .error-message {
+        color: red;
+        font-size: 12px;
+        display: none;
+      }
+
+      .error-message.visible {
+        display: block;
+      }
+
+      button,
+      .import-btn {
+        background-color: #2d8cff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-align: center;
+      }
+
+      button:hover,
+      .import-btn:hover,
+      .import-btn:active {
+        background-color: #1c6ed2;
       }
     </style>
   </head>
   <body>
     <h2>Dummy Data Populator</h2>
-    <label for="endpoint">Select Preset Endpoint</label>
+
+    <label for="endpoint">Select Preset Dummy JSON</label>
     <select id="endpoint">
       <option value="">-- Choose a preset --</option>
       <option value="products">Products</option>
@@ -36,8 +80,12 @@
       <option value="quotes">Quotes</option>
     </select>
 
-    <label for="json">Paste or Edit JSON Data</label>
-    <textarea id="json"></textarea>
+    <label for="fileInput" class="import-btn">Import JSON File</label>
+    <input type="file" id="fileInput" accept=".json" style="display: none;" />
+
+    <label for="json">Paste or Edit JSON</label>
+    <textarea id="json" placeholder=""></textarea>
+    <div class="error-message" id="error-message"></div>
 
     <button id="populate">Populate to Selection</button>
 
@@ -45,18 +93,20 @@
       const endpointSelect = document.getElementById('endpoint');
       const jsonTextarea = document.getElementById('json');
       const populateButton = document.getElementById('populate');
+      const fileInput = document.getElementById('fileInput');
+      const errorMessage = document.getElementById('error-message');
 
       endpointSelect.addEventListener('change', async () => {
         const endpoint = endpointSelect.value;
         if (!endpoint) return;
 
         const url = `https://dummyjson.com/${endpoint}`;
-
         try {
           const res = await fetch(url);
           const json = await res.json();
           const data = json[endpoint] || json;
           jsonTextarea.value = JSON.stringify(data, null, 2);
+          clearError();
         } catch (e) {
           alert('Failed to fetch data');
         }
@@ -67,9 +117,61 @@
           const data = JSON.parse(jsonTextarea.value);
           parent.postMessage({ pluginMessage: { type: 'populate', data } }, '*');
         } catch (e) {
-          alert('Invalid JSON');
+          showError('Invalid JSON: ' + e.message);
         }
       });
+
+      // Import JSON file
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const text = event.target.result;
+            JSON.parse(text);  // validate JSON
+            jsonTextarea.value = text;
+          } catch (err) {
+            alert('Invalid JSON file');
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.classList.add('visible');
+        jsonTextarea.classList.add('invalid');
+      }
+
+      function clearError() {
+        errorMessage.textContent = '';
+        errorMessage.classList.remove('visible');
+        jsonTextarea.classList.remove('invalid');
+      }
+
+      // Debounce function to avoid constant parsing
+      function debounce(func, delay) {
+        let timer;
+        return function () {
+          clearTimeout(timer);
+          timer = setTimeout(func, delay);
+        };
+      }
+
+      jsonTextarea.addEventListener(
+        'input',
+        debounce(() => {
+          try {
+            const parsed = JSON.parse(jsonTextarea.value);
+            jsonTextarea.value = JSON.stringify(parsed, null, 2);
+            clearError();
+          } catch (e) {
+            showError('Invalid JSON: ' + e.message);
+          }
+        }, 500)
+      );
     </script>
   </body>
 </html>

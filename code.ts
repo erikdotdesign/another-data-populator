@@ -98,14 +98,6 @@ const evaluateLogicalExpression = (expression, data) => {
   }
 };
 
-const stripVisibilityDirectives = (node: SceneNode) => {
-  node.name = node.name
-    .replace(/#show\[[^\]]*\]/g, '')
-    .replace(/#hide\[[^\]]*\]/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-};
-
 const handleVisibilityDirectives = (node, data) => {
   const showMatch = node.name.match(/#show\[(.+?)\]/);
   const hideMatch = node.name.match(/#hide\[(.+?)\]/);
@@ -121,8 +113,6 @@ const handleVisibilityDirectives = (node, data) => {
     const result = evaluateLogicalExpression(condition, data);
     node.visible = !result;
   }
-
-  stripVisibilityDirectives(node);
 };
 
 // --- Variants ---
@@ -149,6 +139,63 @@ const parseVariantDirectives = (name) => {
 
 const findActualPropKey = (name, props) => {
   return Object.keys(props).find(key => key.split('#')[0] === name);
+};
+
+// --- Duplicates ---
+
+const handleDuplicateDirective = async (node, data) => {
+  const match = node.name.match(/#duplicate\[\s*({{.+?}}|[^\]]+)\s*\]/);
+  if (!match || !('clone' in node) || !node.parent) return false;
+
+  let count = 1;
+  const rawExpr = match[1];
+
+  if (rawExpr.startsWith('{{')) {
+    const expr = parseDataExpression(rawExpr);
+    if (expr) {
+      let val = resolveKeyPath(data, expr.key);
+      if (val !== undefined) {
+        val = applyFiltersToValue(val, expr.filters, data);
+        count = Math.round(Number(val));
+      }
+    }
+  } else {
+    count = Math.round(Number(rawExpr));
+  }
+
+  if (typeof count === 'number' && count > 1) {
+    const parent = node.parent;
+    const index = parent.children.indexOf(node);
+
+    for (let i = count - 1; i >= 0; i--) {
+      const isOriginal = i === 0;
+      const targetNode = isOriginal ? node : node.clone();
+
+      targetNode.relativeTransform = node.relativeTransform;
+
+      if (!isOriginal) {
+        parent.insertChild(index, targetNode);
+      }
+
+      await traverseAndPopulate(targetNode, data, true);
+    }
+
+    return true; // Duplication handled, skip further processing
+  }
+
+  return false;
+};
+
+// --- Directives ---
+
+const stripNameDirectives = (node) => {
+  node.name = node.name
+    .replace(/#show\[[^\]]*\]/g, '')
+    .replace(/#hide\[[^\]]*\]/g, '')
+    .replace(/#duplicate\[[^\]]*\]/g, '')
+    .replace(/#variant\[[^\]]*\]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 };
 
 // --- Populate ---
@@ -250,36 +297,10 @@ const populateInstanceProperties = (node, data) => {
 };
 
 const traverseAndPopulate = async (node, data, skipDuplicate = false) => {
-  const expr = parseDataExpression(node.name);
-  const shouldDuplicate = !skipDuplicate && expr && 'duplicate' in expr.filters;
 
-  // --- Handle duplication: insert before node to preserve order ---
-  if (shouldDuplicate && 'clone' in node && node.parent) {
-    const rawCount = expr.filters.duplicate[0];
-    const count = typeof rawCount === 'string' ? resolveKeyPath(data, rawCount) : rawCount;
-
-    if (typeof count === 'number' && count > 1) {
-      const cleanName = node.name.replace(/\|\s*duplicate\s+[^\|}]+/, '').trim();
-      const parent = node.parent;
-      const index = parent.children.indexOf(node);
-
-      // Clone in reverse order so they appear above the original
-      for (let i = count - 1; i >= 0; i--) {
-        const isOriginal = i === 0;
-        const targetNode = isOriginal ? node : node.clone();
-
-        targetNode.name = cleanName;
-        targetNode.relativeTransform = node.relativeTransform;
-
-        if (!isOriginal) {
-          parent.insertChild(index, targetNode); // Insert before the original
-        }
-
-        await traverseAndPopulate(targetNode, data, true); // ✅ skip duplicate logic for clones
-      }
-
-      return; // We've handled population, so exit early
-    }
+  // --- Handle duplication ---
+  if (!skipDuplicate && await handleDuplicateDirective(node, data)) {
+    return; // Duplication handled, no need to recurse further
   }
 
   // --- Handle visibility directives  ---
@@ -287,6 +308,9 @@ const traverseAndPopulate = async (node, data, skipDuplicate = false) => {
 
   // --- Populate self ---
   populateInstanceProperties(node, data);
+
+  // --- Clean up any other directives ---
+  stripNameDirectives(node);
 
   const match = node.name.match(/{{(.+?)}}/);
   const hasAssetFill = Array.isArray(node.fills) && node.fills.some(f => f.isAsset);
