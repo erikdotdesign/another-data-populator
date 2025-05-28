@@ -24,7 +24,7 @@ const resolveKeyPath = (data, key) => {
       .replace(/\[(\d+)\]/g, '.$1')
       .split('.')
       .reduce((obj, prop) => (obj ? obj[prop] : undefined), data);
-  } catch {
+  } catch (err) {
     return undefined;
   }
 };
@@ -377,7 +377,7 @@ const cloneAndPopulateGroup = async (group, parentData) => {
 
 // --- Main ----
 
-figma.showUI(__html__, { width: 400, height: 500 });
+figma.showUI(__html__, { width: 360, height: 527 });
 
 figma.ui.onmessage = async (msg) => {
   if (msg.type === 'populate' && msg.data) {

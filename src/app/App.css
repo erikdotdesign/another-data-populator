@@ -1,0 +1,121 @@
+:root {
+  --color-primary: #000;
+  --color-secondary: #999;
+  --color-error: #DC0000;
+  --font-family: "Space Grotesk", sans-serif;
+  --font-family-mono: "Space Mono", monospace;
+  --border-radius: 4px;
+}
+
+/* Reset */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+select {
+  appearance: none;
+}
+
+/* App */
+
+.c-app {
+  display: flex;
+  flex-direction: column;
+  padding: 32px 24px;
+}
+
+.c-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 32px;
+}
+
+.c-control {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.c-control__label {
+  font-family: var(--font-family);
+  line-height: 16px;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px;
+}
+
+.c-control__input {
+  font-family: var(--font-family);
+  box-shadow: 0 0 0 1px var(--color-primary);
+  line-height: 16px;
+  font-size: 12px;
+  width: 100%;
+  outline: none;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 8px;
+  color: var(--color-primary);
+}
+
+.c-control__input--button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.c-control__input--textarea {
+  font-family: var(--font-family-mono);
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+  min-height: 160px;
+}
+
+.c-control__input--error {
+  box-shadow: 0 0 0 1px var(--color-error);
+}
+
+.c-control__message {
+  font-family: var(--font-family);
+  line-height: 12px;
+  font-size: 9px;
+  min-height: 48px;
+  padding: 8px;
+  color: var(--color-error);
+}
+
+.c-control__icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+
+  & svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.25;
+  }
+}
+
+.c-button {
+  outline: none;
+  border: 0;
+  font-family: var(--font-family);
+  line-height: 16px;
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: var(--border-radius);
+  padding: 8px;
+}

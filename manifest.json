@@ -2,7 +2,8 @@
   "name": "another-data-populator",
   "id": "1507375345145522305",
   "api": "1.0.0",
-  "main": "code.js",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
   "capabilities": [],
   "enableProposedApi": false,
   "documentAccess": "dynamic-page",
@@ -11,12 +12,13 @@
     "figjam",
     "slides"
   ],
-  "ui": "ui.html",
   "networkAccess": {
     "allowedDomains": [
       "https://dummyjson.com",
       "https://cdn.dummyjson.com",
-      "https://ik.imagekit.io"
+      "https://ik.imagekit.io",
+      "https://fonts.googleapis.com",
+      "https://fonts.gstatic.com"
     ]
   }
 }
