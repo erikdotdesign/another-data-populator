@@ -83,27 +83,31 @@ const DataPopulatorUI: React.FC = () => {
 
   return (
     <div className="c-app">
-      <Logo />
-      <EndpointSelector 
-        selected={endpoint} 
-        onChange={handleEndpointChange} />
-      <input
-        type="file"
-        accept=".json"
-        style={{ display: "none" }}
-        ref={fileInputRef}
-        onChange={handleFileImport}
-      />
-      <JsonInput 
-        value={jsonText} 
-        onChange={handleInputChange} 
-        error={error}
-        textareaRef={textareaRef} />
-      <button 
-        className='c-button' 
-        onClick={handlePopulate}>
-        Populate to Selection
-      </button>
+      <div className="c-app__body">
+        <Logo />
+        <EndpointSelector 
+          selected={endpoint} 
+          onChange={handleEndpointChange} />
+        <input
+          type="file"
+          accept=".json"
+          style={{ display: "none" }}
+          ref={fileInputRef}
+          onChange={handleFileImport}
+        />
+        <JsonInput 
+          value={jsonText} 
+          onChange={handleInputChange} 
+          error={error}
+          textareaRef={textareaRef} />
+      </div>
+      <div className="c-app__footer">
+        <button 
+          className="c-button" 
+          onClick={handlePopulate}>
+          Populate to Selection
+        </button>
+      </div>
     </div>
   );
 };

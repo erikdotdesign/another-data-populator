@@ -22,6 +22,10 @@ select {
 /* App */
 
 .c-app {
+  height: 100vh;
+}
+
+.c-app__body {
   display: flex;
   flex-direction: column;
   padding: 32px 24px;
@@ -38,6 +42,7 @@ select {
   display: flex;
   flex-direction: column;
   position: relative;
+  padding: 12px 0;
 }
 
 .c-control__label {
@@ -45,7 +50,11 @@ select {
   line-height: 16px;
   font-size: 12px;
   font-weight: 800;
-  padding: 8px;
+  padding: 4px;
+  margin: 0 8px;
+  background: white;
+  position: absolute;
+  transform: translateY(-64%);
 }
 
 .c-control__input {
@@ -57,7 +66,7 @@ select {
   outline: none;
   border: none;
   border-radius: var(--border-radius);
-  padding: 8px;
+  padding: 12px;
   color: var(--color-primary);
 }
 
@@ -66,20 +75,25 @@ select {
   white-space: pre;
   overflow: auto;
   resize: vertical;
-  min-height: 160px;
-}
-
-.c-control__input--error {
-  box-shadow: 0 0 0 1px var(--color-error);
+  min-height: 144px;
 }
 
 .c-control__message {
   font-family: var(--font-family);
   line-height: 12px;
-  font-size: 9px;
+  font-size: 10px;
   min-height: 48px;
   padding: 8px;
-  color: var(--color-error);
+}
+
+.c-control--error {
+  .c-control__label,
+  .c-control__message {
+    color: var(--color-error);
+  }
+  .c-control__input {
+    box-shadow: 0 0 0 1px var(--color-error);
+  }
 }
 
 .c-control__icon {
@@ -88,7 +102,7 @@ select {
   align-items: center;
   justify-content: center;
   width: 32px;
-  height: 32px;
+  height: 64px;
   right: 0;
   bottom: 0;
   pointer-events: none;
@@ -100,15 +114,25 @@ select {
   }
 }
 
+.c-app__footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  padding: 8px;
+  background: white;
+}
+
 .c-button {
   outline: none;
   border: 0;
   font-family: var(--font-family);
   line-height: 16px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   background: var(--color-primary);
   color: #fff;
   border-radius: var(--border-radius);
-  padding: 8px;
+  width: 100%;
+  padding: 12px;
+  cursor: pointer;
 }
