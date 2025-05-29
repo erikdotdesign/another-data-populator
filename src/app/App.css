@@ -38,6 +38,27 @@ select {
   padding-bottom: 32px;
 }
 
+.c-control-group {
+  display: flex;
+
+  .c-control {
+    min-width: 50%;
+    flex-grow: 2;
+
+    &:only-child {
+      padding-right: 0 !important;
+    }
+
+    &:first-child {
+      padding-right: 8px;
+    }
+
+    &:nth-child(2) {
+      padding-left: 8px;
+    }
+  }
+}
+
 .c-control {
   display: flex;
   flex-direction: column;

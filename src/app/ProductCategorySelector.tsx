@@ -17,7 +17,7 @@ const ProductCategorySelector: React.FC<ProductCategorySelectorProps> = ({
 }) => {
   const [categories, setCategories] = useState([initialValue]);
 
-  const handleCategoryChange = async (value: string) => {
+  const handleCategoryChange = (value: string) => {
     setProductCategory(value);
   };
 
@@ -39,7 +39,7 @@ const ProductCategorySelector: React.FC<ProductCategorySelectorProps> = ({
           ...json
         ]);
       } catch {
-        alert("Failed to fetch data with new limit.");
+        alert("Failed to fetch product categories.");
       }
     };
 

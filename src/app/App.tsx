@@ -7,7 +7,8 @@ import LimitInput from './LimitInput';
 import PopulateButton from './PopulateButton';
 import FileImporter from './FileImporter';
 import ProductCategorySelector from './ProductCategorySelector';
-import { STORAGE_KEY_LIMIT, STORAGE_KEY_ENDPOINT, STORAGE_KEY_JSON_TEXT, STORAGE_KEY_PRODUCT_CATEGORY } from "./constants";
+import RecipeMealSelector from './RecipeMealSelector';
+import { STORAGE_KEY_LIMIT, STORAGE_KEY_ENDPOINT, STORAGE_KEY_JSON_TEXT, STORAGE_KEY_PRODUCT_CATEGORY, STORAGE_KEY_RECIPE_MEAL } from "./constants";
 
 import "./App.css";
 
@@ -18,6 +19,7 @@ const DataPopulatorUI: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [storageLoaded, setStorageLoaded] = useState<boolean>(false);
   const [productCategory, setProductCategory] = useState<string>("");
+  const [recipeMeal, setRecipeMeal] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,6 +41,9 @@ const DataPopulatorUI: React.FC = () => {
         if (endpoint === "products" && productCategory) {
           url += `/category/${productCategory}`;
         }
+        if (endpoint === "recipes" && recipeMeal) {
+          url += `/meal-type/${recipeMeal}`;
+        }
         url += `?limit=${limit}`;
         
         const res = await fetch(url);
@@ -59,7 +64,13 @@ const DataPopulatorUI: React.FC = () => {
     return () => {
       debouncedFetch.cancel();
     };
-  }, [limit, endpoint, productCategory]);
+  }, [limit, endpoint, productCategory, recipeMeal]);
+
+  // reset endpoint filters on endpoint change
+  useEffect(() => {
+    setProductCategory("");
+    setRecipeMeal("");
+  }, [endpoint]);
 
   // load cached values
   useEffect(() => {
@@ -67,6 +78,7 @@ const DataPopulatorUI: React.FC = () => {
     parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_LIMIT } }, "*");
     parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_PRODUCT_CATEGORY } }, "*");
     parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_JSON_TEXT } }, "*");
+    parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_RECIPE_MEAL } }, "*");
 
     window.onmessage = (event) => {
       const msg = event.data.pluginMessage;
@@ -75,6 +87,7 @@ const DataPopulatorUI: React.FC = () => {
         if (msg.key === STORAGE_KEY_LIMIT) setLimit(msg.value || "");
         if (msg.key === STORAGE_KEY_PRODUCT_CATEGORY) setProductCategory(msg.value || "");
         if (msg.key === STORAGE_KEY_JSON_TEXT) setJsonText(msg.value || "");
+        if (msg.key === STORAGE_KEY_RECIPE_MEAL) setRecipeMeal(msg.value || "");
         setStorageLoaded(true);
       }
     };
@@ -104,6 +117,14 @@ const DataPopulatorUI: React.FC = () => {
                 productCategory={productCategory}
                 storageLoaded={storageLoaded}
                 setProductCategory={setProductCategory} />
+            : null
+          }
+          {
+            endpoint && endpoint === 'recipes'
+            ? <RecipeMealSelector
+                recipeMeal={recipeMeal}
+                storageLoaded={storageLoaded}
+                setRecipeMeal={setRecipeMeal} />
             : null
           }
         </div>
