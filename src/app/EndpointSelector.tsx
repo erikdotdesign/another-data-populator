@@ -1,8 +1,11 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { STORAGE_KEY_ENDPOINT } from "./constants";
 
 interface EndpointSelectorProps {
-  selected: string;
-  onChange: (value: string) => void;
+  endpoint: string;
+  fileInputRef: any;
+  storageLoaded: boolean;
+  setEndpoint: (endpoint: string) => void;
 }
 
 const endpoints = [
@@ -18,7 +21,32 @@ const endpoints = [
   { label: "Import JSON File", value: "__file__" }, // special case
 ];
 
-const EndpointSelector: React.FC<EndpointSelectorProps> = ({ selected, onChange }) => {
+const EndpointSelector: React.FC<EndpointSelectorProps> = ({ 
+  endpoint, 
+  fileInputRef, 
+  storageLoaded,
+  setEndpoint
+}) => {
+
+  const handleEndpointChange = async (value: string) => {
+    if (value === "__file__") {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    setEndpoint(value);
+
+    if (!value) return;
+  };
+
+  useEffect(() => {
+    if (storageLoaded) {
+      parent.postMessage({
+        pluginMessage: { type: "save-storage", key: STORAGE_KEY_ENDPOINT, value: endpoint },
+      }, "*");
+    }
+  }, [endpoint]);
+
   return (
     <div className="c-control">
       <label 
@@ -29,8 +57,8 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({ selected, onChange 
       <select
         className="c-control__input"
         id="endpoint"
-        value={selected}
-        onChange={(e) => onChange(e.target.value)}>
+        value={endpoint}
+        onChange={(e) => handleEndpointChange(e.target.value)}>
         {endpoints.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}

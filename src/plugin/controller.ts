@@ -380,6 +380,15 @@ const cloneAndPopulateGroup = async (group, parentData) => {
 figma.showUI(__html__, { width: 360, height: 527 });
 
 figma.ui.onmessage = async (msg) => {
+  if (msg.type === 'save-storage') {
+    await figma.clientStorage.setAsync(msg.key, msg.value);
+  }
+
+  if (msg.type === 'load-storage') {
+    const value = await figma.clientStorage.getAsync(msg.key);
+    figma.ui.postMessage({ type: 'storage-loaded', key: msg.key, value });
+  }
+  
   if (msg.type === 'populate' && msg.data) {
     const selection = figma.currentPage.selection;
     if (selection.length === 0) {
