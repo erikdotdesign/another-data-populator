@@ -72,9 +72,6 @@ const DataPopulatorUI: React.FC = () => {
           endpoint={endpoint} 
           fileInputRef={fileInputRef}
           setEndpoint={setEndpoint}
-          setError={setError}
-          setJsonText={setJsonText}
-          resetScroll={resetScroll}
           storageLoaded={storageLoaded} />
         <div className="c-control-group">
           {
