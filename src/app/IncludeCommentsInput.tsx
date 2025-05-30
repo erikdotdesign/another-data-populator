@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { STORAGE_KEY_INCLUDE_COMMENTS } from "./constants";
 
 interface IncludeCommentsInputProps {
