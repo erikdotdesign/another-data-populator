@@ -50,7 +50,7 @@ shows layer if true and hides otherwise
 hides layer if true and shows otherwise
 
 ### 2. `#duplicate[condition]`  
-duplicates the layer n times
+duplicate layer n times
 
 ### 3. `#variant[condition, component property]`  
 set component property based on condition
