@@ -25,38 +25,6 @@ const IncludeCommentsInput: React.FC<IncludeCommentsInputProps> = ({
     }
   }, [includeComments]);
 
-  // useEffect(() => {
-  //   const fetchData = async () => {
-  //     try {
-  //       const posts = jsonText;
-
-  //       const postsWithComments = await Promise.all(
-  //         posts.map(async (post) => {
-  //           const commentsRes = await fetch(`https://dummyjson.com/comments/post/${post.id}`);
-  //           const commentsData = await commentsRes.json();
-  //           return {
-  //             ...post,
-  //             comments: commentsData.comments,
-  //           };
-  //         })
-  //       );
-  //       // const res = await fetch('https://dummyjson.com/posts/tag-list');
-  //       // const json = await res.json();
-  //       // setTags([
-  //       //   initialValue,
-  //       //   ...json.map((tag) => ({
-  //       //     name: tag,
-  //       //     value: tag
-  //       //   }))
-  //       // ]);
-  //     } catch {
-  //       alert("Failed to fetch post tags.");
-  //     }
-  //   };
-
-  //   fetchData();
-  // }, []);
-
   return (
     <div className="c-control c-control--checkbox">
       <label 
