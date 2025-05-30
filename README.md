@@ -8,7 +8,7 @@ A Figma plugin that populates your designs with JSON.
 
 2. In the same Layer Group, create a Shape Layer (this is your image placeholder). Give the Shape Layer a placeholder name in double curly brackets – such as `{{image}}`. The plugin will replace this placeholder with respective image data (PNG or JPG).
 
-3. For JSON arrays, create a Layer Group with a placeholder name like `{{items}}`. That group must contain one child Group Layer with the name `{{template}}`. This is the group that will be cloned and populated with the JSON array data. This works recursively with nested data. The array placeholder can have an optinal limit filter `{{items | limit 5}}`, which will limit the number of `{{template}}` clones.
+3. For JSON arrays, create a Layer Group with a placeholder name like `{{items}}`. That group must contain one child Group Layer with the name `{{template}}`. This is the group that will be cloned and populated with the JSON array data. This works recursively with nested data. The array placeholder can have an optional limit filter `{{items | limit 5}}`, which will limit the number of `{{template}}` clones.
 
 ## Available Commands
 
