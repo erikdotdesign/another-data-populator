@@ -1,6 +1,7 @@
 :root {
   --color-primary: #000;
   --color-secondary: #999;
+  --color-tertiary: #eee;
   --color-error: #DC0000;
   --font-family: "Space Grotesk", sans-serif;
   --font-family-mono: "Space Mono", monospace;
@@ -71,7 +72,7 @@ select {
   display: flex;
   flex-direction: row;
   align-items: center;
-  background-color: #eee;
+  background-color: var(--color-tertiary);
   border-radius: var(--border-radius);
   margin-bottom: 12px;
   position: relative;
@@ -93,6 +94,16 @@ select {
     outline: 0;
     box-shadow: none;
     appearance: none;
+
+    &:hover {
+      box-shadow: none
+    }
+  }
+
+  &:hover {
+    .c-control__checkmark {
+      box-shadow: 0 0 0 1px var(--color-primary);
+    }
   }
 
   .c-control__checkmark {
@@ -103,13 +114,14 @@ select {
     width: 16px;
     background-color: #fff;
     border-radius: var(--border-radius);
-    box-shadow: 0 0 0 1px var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-secondary);
     pointer-events: none;
     cursor: pointer;
   }
 
   .c-control__input:checked ~ .c-control__checkmark {
     background-color: #000;
+    box-shadow: 0 0 0 1px var(--color-primary);
   }
 
   .c-control__checkmark:after {
@@ -149,7 +161,7 @@ select {
 
 .c-control__input {
   font-family: var(--font-family);
-  box-shadow: 0 0 0 1px var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-secondary);
   line-height: 16px;
   font-size: 12px;
   width: 100%;
@@ -158,6 +170,10 @@ select {
   border-radius: var(--border-radius);
   padding: 12px;
   color: var(--color-primary);
+
+  &:hover {
+    box-shadow: 0 0 0 1px var(--color-primary);
+  }
 
   &:is(select) {
     cursor: pointer;
@@ -195,15 +211,15 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
+  width: 40px;
   height: 64px;
   right: 0;
   bottom: 0;
   pointer-events: none;
 
   & svg {
-    width: 16px;
-    height: 16px;
+    width: 24px;
+    height: 24px;
     opacity: 0.25;
   }
 }
