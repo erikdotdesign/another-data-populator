@@ -64,6 +64,70 @@ select {
   flex-direction: column;
   position: relative;
   padding: 12px 0;
+  margin-bottom: 4px;
+}
+
+.c-control--checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background-color: #eee;
+  border-radius: var(--border-radius);
+  margin-bottom: 12px;
+  position: relative;
+
+  .c-control__label {
+    flex-grow: 2;
+    transform: none;
+    background: none;
+    position: relative;
+  }
+
+  .c-control__input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+  }
+
+  .c-control__checkmark {
+    position: absolute;
+    right: 0;
+    margin: 0 12px;
+    height: 16px;
+    width: 16px;
+    background-color: #fff;
+    border-radius: var(--border-radius);
+    box-shadow: 0 0 0 1px var(--color-primary);
+    pointer-events: none;
+  }
+
+  .c-control__input:checked ~ .c-control__checkmark {
+    background-color: #000;
+  }
+
+  .c-control__checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+  }
+
+  .c-control__input:checked ~ .c-control__checkmark:after {
+    display: block;
+  }
+
+  .c-control__checkmark:after {
+    left: 5px;
+    top: 3px;
+    width: 3px;
+    height: 6px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    -webkit-transform: rotate(45deg);
+    -ms-transform: rotate(45deg);
+    transform: rotate(45deg);
+  }
 }
 
 .c-control__label {

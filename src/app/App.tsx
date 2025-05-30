@@ -8,7 +8,9 @@ import PopulateButton from './PopulateButton';
 import FileImporter from './FileImporter';
 import ProductCategorySelector from './ProductCategorySelector';
 import RecipeMealSelector from './RecipeMealSelector';
-import { STORAGE_KEY_LIMIT, STORAGE_KEY_ENDPOINT, STORAGE_KEY_JSON_TEXT, STORAGE_KEY_PRODUCT_CATEGORY, STORAGE_KEY_RECIPE_MEAL } from "./constants";
+import PostTagSelector from './PostTagSelector';
+import IncludeCommentsInput from './IncludeCommentsInput';
+import { STORAGE_KEY_LIMIT, STORAGE_KEY_ENDPOINT, STORAGE_KEY_JSON_TEXT, STORAGE_KEY_PRODUCT_CATEGORY, STORAGE_KEY_RECIPE_MEAL, STORAGE_KEY_POST_TAG, STORAGE_KEY_INCLUDE_COMMENTS } from "./constants";
 
 import "./App.css";
 
@@ -20,6 +22,8 @@ const DataPopulatorUI: React.FC = () => {
   const [storageLoaded, setStorageLoaded] = useState<boolean>(false);
   const [productCategory, setProductCategory] = useState<string>("");
   const [recipeMeal, setRecipeMeal] = useState<string>("");
+  const [postTag, setPostTag] = useState<string>("");
+  const [includeComments, setIncludeComments] = useState<boolean>(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,17 +48,35 @@ const DataPopulatorUI: React.FC = () => {
         if (endpoint === "recipes" && recipeMeal) {
           url += `/meal-type/${recipeMeal}`;
         }
+        if (endpoint === "posts" && postTag) {
+          url += `/tag/${postTag}`;
+        }
         url += `?limit=${limit}`;
         
         const res = await fetch(url);
         const json = await res.json();
-        const data = json[endpoint] || json;
+        let data = json[endpoint] || json;
+
+        if (includeComments) {
+          const postsWithComments = await Promise.all(
+            data.map(async (post) => {
+              const commentsRes = await fetch(`https://dummyjson.com/comments/post/${post.id}`);
+              const commentsData = await commentsRes.json();
+              return {
+                ...post,
+                comments: commentsData.comments,
+              };
+            })
+          );
+          data = postsWithComments;
+        }
+
         const pretty = JSON.stringify(data, null, 2);
         setJsonText(pretty);
         setError(null);
         resetScroll();
       } catch {
-        alert("Failed to fetch data with new limit.");
+        alert("Failed to fetch data with new parameters.");
       }
     };
 
@@ -64,12 +86,14 @@ const DataPopulatorUI: React.FC = () => {
     return () => {
       debouncedFetch.cancel();
     };
-  }, [limit, endpoint, productCategory, recipeMeal]);
+  }, [limit, endpoint, productCategory, recipeMeal, postTag, includeComments]);
 
   // reset endpoint filters on endpoint change
   useEffect(() => {
     setProductCategory("");
     setRecipeMeal("");
+    setPostTag("");
+    setIncludeComments(false);
   }, [endpoint]);
 
   // load cached values
@@ -79,6 +103,8 @@ const DataPopulatorUI: React.FC = () => {
     parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_PRODUCT_CATEGORY } }, "*");
     parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_JSON_TEXT } }, "*");
     parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_RECIPE_MEAL } }, "*");
+    parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_POST_TAG } }, "*");
+    parent.postMessage({ pluginMessage: { type: "load-storage", key: STORAGE_KEY_INCLUDE_COMMENTS } }, "*");
 
     window.onmessage = (event) => {
       const msg = event.data.pluginMessage;
@@ -88,6 +114,8 @@ const DataPopulatorUI: React.FC = () => {
         if (msg.key === STORAGE_KEY_PRODUCT_CATEGORY) setProductCategory(msg.value || "");
         if (msg.key === STORAGE_KEY_JSON_TEXT) setJsonText(msg.value || "");
         if (msg.key === STORAGE_KEY_RECIPE_MEAL) setRecipeMeal(msg.value || "");
+        if (msg.key === STORAGE_KEY_POST_TAG) setPostTag(msg.value || "");
+        if (msg.key === STORAGE_KEY_INCLUDE_COMMENTS) setIncludeComments(msg.value || "");
         setStorageLoaded(true);
       }
     };
@@ -127,7 +155,23 @@ const DataPopulatorUI: React.FC = () => {
                 setRecipeMeal={setRecipeMeal} />
             : null
           }
+          {
+            endpoint && endpoint === 'posts'
+            ? <PostTagSelector
+                postTag={postTag}
+                storageLoaded={storageLoaded}
+                setPostTag={setPostTag} />
+            : null
+          }
         </div>
+        {
+          endpoint && endpoint === 'posts'
+          ? <IncludeCommentsInput
+              includeComments={includeComments}
+              storageLoaded={storageLoaded}
+              setIncludeComments={setIncludeComments} />
+          : null
+        }
         <FileImporter
           fileInputRef={fileInputRef}
           setEndpoint={setEndpoint}

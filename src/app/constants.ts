@@ -7,3 +7,5 @@ export const STORAGE_KEY_JSON_TEXT = `${STORAGE_KEY_BASE}jsonText`;
 export const STORAGE_KEY_LIMIT = `${STORAGE_KEY_BASE}limit`;
 export const STORAGE_KEY_PRODUCT_CATEGORY = `${STORAGE_KEY_BASE}productCategory`;
 export const STORAGE_KEY_RECIPE_MEAL = `${STORAGE_KEY_BASE}recipeMeal`;
+export const STORAGE_KEY_POST_TAG = `${STORAGE_KEY_BASE}postTag`;
+export const STORAGE_KEY_INCLUDE_COMMENTS = `${STORAGE_KEY_BASE}includeComments`;

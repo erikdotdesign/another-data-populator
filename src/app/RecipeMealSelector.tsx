@@ -44,7 +44,7 @@ const RecipeMealSelector: React.FC<RecipeMealSelectorProps> = ({
           }))
         ]);
       } catch {
-        alert("Failed to fetch recipe tags.");
+        alert("Failed to fetch recipe meal types.");
       }
     };
 

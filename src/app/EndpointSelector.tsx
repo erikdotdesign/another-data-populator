@@ -53,7 +53,7 @@ const EndpointSelector: React.FC<EndpointSelectorProps> = ({
       <label 
         className="c-control__label"
         htmlFor="endpoint">
-        Select Preset JSON
+        Select preset JSON
       </label>
       <select
         className="c-control__input"
